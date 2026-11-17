@@ -1,0 +1,21 @@
+query SkuMappings(
+  $organizationId: ID!
+  $query: String
+  $after: String
+  $before: String
+) {
+  skuMappings(
+    organizationId: $organizationId
+    query: $query
+    after: $after
+    before: $before
+  ) {
+    rows {
+      ownerSku
+      vtexSku
+      updatedAt
+    }
+    next
+    previous
+  }
+}

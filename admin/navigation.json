@@ -1,0 +1,15 @@
+[
+  {
+    "section": "products",
+    "titleId": "sku-mapping.navigation.label-group",
+    "subSection": "sku-mapping",
+    "searchKeyWordsHelpers": "sku-mapping.navigation.search.kws",
+    "subSectionItems": [
+      {
+        "labelId": "sku-mapping.navigation.label",
+        "path": "/admin/sku-mapping",
+        "searchKeyWordsHelpers": "sku-mapping.navigation.search.kws"
+      }
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "extends": "@vtex/tsconfig",
+  "compilerOptions": {
+    "allowJs": false,
+    "jsx": "react",
+    "lib": ["es2017", "dom", "es2018.promise", "es2020.string", "es2020.symbol.wellknown"],
+    "module": "esnext",
+    "strict": true,
+    "types": []
+  },
+  "include": ["./**/*"],
+  "exclude": ["node_modules"]
+}

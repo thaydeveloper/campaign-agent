@@ -1,0 +1,112 @@
+"""
+A B2B organization: a corporate (isCorporate) document of the CL entity.
+Its id is the customerId the mappings are stored under.
+"""
+type SkuMappingOrganization {
+  id: ID!
+  name: String!
+}
+
+type SkuMappingImport {
+  id: Int!
+  fileName: String!
+  "running, sweeping, completed or failed (stopped)"
+  status: String!
+  inserted: Int!
+  updated: Int!
+  rejected: Int!
+  startedAt: String!
+  finishedAt: String
+  "Opened by the user asking."
+  mine: Boolean!
+}
+
+type SkuMappingOverview {
+  total: Int!
+  "Most recent finished import (completed or stopped)."
+  lastImport: SkuMappingImport
+  "Import still sending chunks. Stale ones (15 minutes without a chunk) are left out."
+  activeImport: SkuMappingImport
+}
+
+type SkuMapping {
+  ownerSku: String!
+  vtexSku: String!
+  updatedAt: String!
+}
+
+type SkuMappingPage {
+  rows: [SkuMapping!]!
+  "Cursor for the next page (pass as `after`)."
+  next: String
+  "Cursor for the previous page (pass as `before`)."
+  previous: String
+}
+
+type SkuMappingImportStarted {
+  importId: Int!
+}
+
+type SkuMappingChunkResult {
+  inserted: Int!
+  updated: Int!
+  unchanged: Int!
+}
+
+type SkuMappingImportFinished {
+  inserted: Int!
+  updated: Int!
+  total: Int!
+}
+
+"""
+Every field requires a VTEX ID Admin token of this account, checked by the
+Node service itself (node/skuMapping/adminUser.ts): any user logged in to the
+Admin may use the app, so `@auth(scope: PUBLIC)` skips the License Manager
+check the directive would otherwise make. Errors come back with the code as
+the message: UNAUTHORIZED, NOT_CONFIGURED, ORGANIZATION_NOT_FOUND,
+INVALID_INPUT, INVALID_ROWS, IMPORT_RUNNING, IMPORT_NOT_RUNNING or
+UNAVAILABLE.
+"""
+type Query {
+  "Corporate CL documents, sorted by name."
+  skuMappingOrganizations: [SkuMappingOrganization!]!
+    @auth(scope: PUBLIC) @cacheControl(scope: PRIVATE)
+
+  skuMappingOverview(organizationId: ID!): SkuMappingOverview!
+    @auth(scope: PUBLIC) @cacheControl(scope: PRIVATE)
+
+  "50 mappings per page, ordered by code. `query` matches the start of the code, whatever its case."
+  skuMappings(
+    organizationId: ID!
+    query: String
+    after: String
+    before: String
+  ): SkuMappingPage! @auth(scope: PUBLIC) @cacheControl(scope: PRIVATE)
+}
+
+type Mutation {
+  "Opens an import. Fails with IMPORT_RUNNING while another one is active for the organization."
+  startSkuMappingImport(
+    organizationId: ID!
+    fileName: String!
+  ): SkuMappingImportStarted! @auth(scope: PUBLIC)
+
+  "Saves up to 5,000 [owner_sku, vtex_sku] pairs. Sending the same chunk again changes nothing."
+  addSkuMappingChunk(
+    organizationId: ID!
+    importId: Int!
+    rows: [[String!]!]!
+  ): SkuMappingChunkResult! @auth(scope: PUBLIC)
+
+  "Closes an import. `rejectedRows` are the rows the screen refused."
+  finishSkuMappingImport(
+    organizationId: ID!
+    importId: Int!
+    rejectedRows: Int!
+  ): SkuMappingImportFinished! @auth(scope: PUBLIC)
+
+  "Stops an import opened by this user. Rows already sent stay saved."
+  cancelSkuMappingImport(organizationId: ID!, importId: Int!): Boolean!
+    @auth(scope: PUBLIC)
+}

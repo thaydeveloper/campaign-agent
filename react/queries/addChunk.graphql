@@ -1,0 +1,15 @@
+mutation AddSkuMappingChunk(
+  $organizationId: ID!
+  $importId: Int!
+  $rows: [[String!]!]!
+) {
+  addSkuMappingChunk(
+    organizationId: $organizationId
+    importId: $importId
+    rows: $rows
+  ) {
+    inserted
+    updated
+    unchanged
+  }
+}

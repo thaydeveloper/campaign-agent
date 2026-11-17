@@ -1,0 +1,23 @@
+query SkuMappingOverview($organizationId: ID!) {
+  skuMappingOverview(organizationId: $organizationId) {
+    total
+    lastImport {
+      ...SkuMappingImportFields
+    }
+    activeImport {
+      ...SkuMappingImportFields
+    }
+  }
+}
+
+fragment SkuMappingImportFields on SkuMappingImport {
+  id
+  fileName
+  status
+  inserted
+  updated
+  rejected
+  startedAt
+  finishedAt
+  mine
+}

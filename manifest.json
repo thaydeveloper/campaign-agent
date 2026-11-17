@@ -1,0 +1,69 @@
+{
+  "name": "sku-mapping",
+  "vendor": "demoindsupply",
+  "version": "0.1.0",
+  "title": "SKU Mapping",
+  "description": "Catalog → SKU Mapping: choose a B2B organization and import its owner_sku → vtex_sku spreadsheet into the customer portal's mapping database.",
+  "builders": {
+    "admin": "0.x",
+    "react": "3.x",
+    "node": "7.x",
+    "graphql": "2.x",
+    "messages": "1.x"
+  },
+  "dependencies": {
+    "vtex.styleguide": "9.x",
+    "vtex.render-runtime": "8.x"
+  },
+  "policies": [
+    {
+      "name": "outbound-access",
+      "attrs": {
+        "host": "portal.vtexcommercestable.com.br",
+        "path": "/api/vtexid/credential/validate"
+      }
+    },
+    {
+      "name": "outbound-access",
+      "attrs": {
+        "host": "api.vtex.com",
+        "path": "/api/dataentities/CL/*"
+      }
+    },
+    {
+      "name": "ADMIN_DS"
+    },
+    {
+      "name": "outbound-access",
+      "attrs": {
+        "host": "vxmotxxwjhxdjnleqidr.supabase.co",
+        "path": "/rest/v1/rpc/*"
+      }
+    }
+  ],
+  "settingsSchema": {
+    "title": "SKU Mapping",
+    "description": "Supabase Data API access for the mapping database. Only the app's Node service reads these values.",
+    "type": "object",
+    "properties": {
+      "supabaseUrl": {
+        "title": "Supabase URL",
+        "description": "https://vxmotxxwjhxdjnleqidr.supabase.co (the only host the app may call)",
+        "type": "string"
+      },
+      "supabasePublishableKey": {
+        "title": "Supabase publishable key",
+        "description": "Project Settings → API Keys → Publishable key",
+        "type": "string",
+        "format": "password"
+      },
+      "writerToken": {
+        "title": "Writer token (sku_mapping_writer)",
+        "description": "SKU_MAPPING_WRITER_JWT written by npm run db:writer-token in the customer portal",
+        "type": "string",
+        "format": "password"
+      }
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/vtex/node-vtex-api/master/gen/manifest.schema"
+}

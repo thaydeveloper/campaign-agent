@@ -1,0 +1,6 @@
+query SkuMappingOrganizations {
+  skuMappingOrganizations {
+    id
+    name
+  }
+}

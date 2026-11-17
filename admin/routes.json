@@ -1,0 +1,10 @@
+{
+  "admin.app.sku-mapping": {
+    "component": "SkuMappingAdmin",
+    "path": "/admin/app/sku-mapping"
+  },
+  "admin.app.sku-mapping.organization": {
+    "component": "SkuMappingAdmin",
+    "path": "/admin/app/sku-mapping/:organizationId"
+  }
+}

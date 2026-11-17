@@ -1,0 +1,15 @@
+mutation FinishSkuMappingImport(
+  $organizationId: ID!
+  $importId: Int!
+  $rejectedRows: Int!
+) {
+  finishSkuMappingImport(
+    organizationId: $organizationId
+    importId: $importId
+    rejectedRows: $rejectedRows
+  ) {
+    inserted
+    updated
+    total
+  }
+}

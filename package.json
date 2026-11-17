@@ -1,0 +1,17 @@
+{
+  "name": "sku-mapping-admin-demoindsupply",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "setup": "yarn --cwd node install && yarn --cwd react install && yarn install",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p node --noEmit && tsc -p react --noEmit && react/node_modules/.bin/tsc -p react --noEmit && tsc -p . --noEmit"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
+    "@types/node": "^20.0.0",
+    "tsx": "4.23.15",
+    "typescript": "5.5.3"
+  }
+}

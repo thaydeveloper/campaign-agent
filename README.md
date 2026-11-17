@@ -1,112 +1,127 @@
-# PrimeGoods Campaign Agent
+# SKU Mapping no Admin VTEX (demoindsupply)
 
-A VTEX Admin agent that turns one sentence into a full campaign:
+App VTEX IO de Admin (`demoindsupply.sku-mapping`). Em **Catálogo → SKU Mapping**, o gestor escolhe uma organização B2B e importa a planilha `owner_sku → vtex_sku` dela. As regras do arquivo e o banco são os mesmos do SKU Mapping do `customer-portal-demoindsupply`: o que o gestor importa aparece no portal e no FastStore na hora.
 
-1. Searches the VTEX Catalog and previews the products.
-2. Asks for anything missing (discount, dates, products) and shows a plan to confirm.
-3. After confirmation, creates the **collection**, a **promotion** scoped to it, the
-   landing page **copy** and **banners** (Gemini), and saves a **landing page** in a
-   **CMS branch** (Storefront > Content).
-4. Shares the CMS **preview link** of the landing page.
+A VTEX hospeda o app. Não há site nem URL pública.
 
-| Folder | Stack | Purpose |
-| --- | --- | --- |
-| [`admin-ui/`](./admin-ui/) | Next.js, Raccoon, `@vtex/agentic-ui`, Shoreline | Chat UI, same views and components as the Collections Agent |
-| [`backend/`](./backend/) | Node.js, Express, `@google/genai` | Agent loop (Gemini function calling), VTEX and CMS clients, conversation storage |
+## Estrutura
 
-Nothing is created before the user confirms the plan: the confirmation card carries a
-one-time code, and the creation tools refuse to run until the user sends it.
+| Pasta | O que tem |
+| --- | --- |
+| `manifest.json` | Builders, políticas de acesso e as configurações do app (`settingsSchema`) |
+| `admin/` | Menu (Catálogo → SKU Mapping) e as rotas `/admin/sku-mapping` e `/admin/sku-mapping/:organizationId` |
+| `react/` | A tela. `skuMapping/mappingFile.ts` e `skuMapping/xlsx.ts` são as regras do arquivo e o leitor de XLSX portados do portal. O modelo em Excel está embutido em `skuMapping/template.ts` |
+| `node/` | Serviço GraphQL: confere o token do Admin no VTEX ID, confere a organização na Master Data e chama o banco pela Data API do Supabase |
+| `graphql/` | Schema das queries e mutations |
+| `messages/` | Textos em inglês, português e espanhol |
+| `db/` | Migração 005 e `writer-token.ts`, para copiar para o portal (que continua sendo a fonte do schema) |
+| `test/` | Testes. As funções SQL rodam num Postgres real em memória (PGlite), com as migrações 001–004 do portal copiadas em `test/portal-migrations/` |
 
-## Requirements
+## Como funciona
 
-- Node.js 22+
-- VTEX CLI (`vtex`) logged in to `primegoods`
-- A Gemini API key
-- A CMS branch in Storefront > Content (create it in the CMS before asking for a campaign)
-- The Admin user needs permissions for Catalog (collections), Promotions and the CMS
-
-## Setup
-
-```bash
-# Backend
-cd backend
-npm install
-cp .env.example .env   # set GEMINI_API_KEY (and optionally CMS_BRANCH)
-
-# UI
-cd ../admin-ui
-npx pnpm@10 install
-cp .env.example .env
+```text
+React no Admin ──GraphQL──▶ Node do app ──▶ VTEX ID   (o token é do Admin desta conta?)
+                                        ──▶ Master Data CL, isCorporate=true   (a organização existe?)
+                                        ──▶ Supabase Data API /rest/v1/rpc/sku_mapping_admin_*
 ```
 
-## Run locally
+- **Organização** é o contrato B2B: documento CL com `isCorporate=true`. O id dele é o `customerId`, gravado como `tenant_id`. Vai na URL, então o link pode ser compartilhado.
+- **Importação:** soma. Códigos novos entram, os que já existem são atualizados e nada é apagado. O navegador lê e valida o arquivo, mostra erros e repetidos, e envia lotes de até 5.000 linhas com barra de progresso. Um lote que falha por rede é reenviado; reenviar um lote não muda nada.
+- **Uma importação por vez por organização.** A trava é o índice da migração 001, então vale também para o portal. Uma importação parada há mais de 15 minutos é liberada, e quem a abriu pode cancelar.
+- **Por que funções no banco:** um app VTEX IO só faz chamadas HTTP liberadas em `outbound-access` e não abre conexão com o Postgres. Pela Data API não dá para manter uma transação entre chamadas, então cada passo (`start`, `chunk`, `finish`, `cancel`, `overview`, `page`) é uma função que roda numa transação.
 
-Use three terminals:
+### Segurança
 
-```bash
-# 1. Backend on http://localhost:8009
-cd backend && npm run dev
+- Toda chamada exige o token do Admin (`adminUserAuthToken`), conferido em `POST /api/vtexid/credential/validate`: precisa ser `audience=admin` e da conta `demoindsupply`. O e-mail do gestor vira o `user_id` da importação.
+- Antes de ler ou gravar, o Node confere na Master Data que a organização existe e é corporativa. Os lotes pulam essa ida: escrevem numa importação aberta para uma organização já conferida, e o banco só aceita lotes da mesma organização e do mesmo usuário.
+- O papel `sku_mapping_writer` só executa as funções `sku_mapping_admin_*`. Não tem acesso a nenhuma tabela. A migração tira o `EXECUTE` de `PUBLIC`, `anon` e `authenticated`.
+- O token do papel fica nas configurações do app e só o Node lê. O navegador nunca recebe credencial de banco.
+- `outbound-access` libera só `vxmotxxwjhxdjnleqidr.supabase.co/rest/v1/rpc/*`, a validação do VTEX ID e `api.vtex.com/api/dataentities/CL/*`.
 
-# 2. UI on http://localhost:3010
-cd admin-ui && npx next dev -p 3010
+### Erros
 
-# 3. Link the Admin app in a workspace WITHOUT "localhost" in its name
-vtex login primegoods
-vtex use campaignagent
-cd admin-ui/apps/campaign-agent && vtex link
-```
+O Node devolve o código como mensagem do erro GraphQL e a tela traduz:
 
-Open `https://campaignagent--primegoods.myvtex.com/admin/campaign-agent`
-(the app is listed under **Promotions** in the Admin menu).
+| Código | Quando |
+| --- | --- |
+| `UNAUTHORIZED` | Token do Admin ausente, inválido ou de outra conta |
+| `NOT_CONFIGURED` | Faltam as configurações do app |
+| `ORGANIZATION_NOT_FOUND` | O id não é de um CL corporativo |
+| `INVALID_INPUT`, `INVALID_ROWS` | Pedido ou lote fora das regras (o navegador já confere antes) |
+| `IMPORT_RUNNING` | Já existe importação ativa na organização (Admin ou portal) |
+| `IMPORT_NOT_RUNNING` | A importação foi encerrada, cancelada ou liberada |
+| `UNAVAILABLE` | VTEX ID, Master Data, configurações ou banco não responderam. O detalhe vai para o log do app |
 
-Do not use a `*localhost` workspace while the FastStore dev server runs on port 3000.
-In those workspaces the Admin loads every Admin app (Promotions, Content, …) from
-`localhost:3000`, so those menus open the storefront instead. In a regular dev
-workspace the Admin keeps the native apps and loads only this app from
-`localhost:3010` (the `prodUrl` in `admin/navigation.json`).
+A conferência do arquivo (por exemplo `Row 3: owner_sku is required.`) continua em inglês, como no portal.
 
-The Admin passes the logged-in user's token to the UI, which forwards it to the backend.
-All VTEX and CMS calls run with that user's permissions.
+## Desenvolvimento
 
-## Example
-
-> Create a Black Friday campaign for Nike running shoes with 20% off from Nov 20 to Nov 30, landing page in the `black-friday` branch
-
-The agent searches the products, previews them, shows the plan with a
-"Confirm campaign XXXXXX" button, and after confirmation creates everything. The
-**Campaign steps** column on the right of the chat tracks each step (collection,
-promotion, copy, banners, landing page); finished steps open the created collection,
-promotion or CMS entry in a new tab.
-
-## Landing page and CMS
-
-- The page is a `landingPage` entry built with native FastStore sections (Hero,
-  BannerText, ProductShelf filtered by the new collection). See
-  [`backend/docs/cms-api.md`](./backend/docs/cms-api.md) for the CMS endpoints used.
-- The branch comes from the chat or `CMS_BRANCH`. If missing or not found, the agent asks
-  for it and lists the available branches.
-- The FastStore repo (`../faststore-primegoods`) only provides the schema. Its
-  `cms/faststore/pages/cms_content_type__landingpage.jsonc` now includes the native
-  `seo` object and `identifierKeys: ["slug"]`. Publish it to the CMS with
-  `yarn cms-sync` from that repo (not run automatically). Until then the agent saves
-  the page without SEO fields.
-
-### Banner images
-
-Each banner is committed to the public GitHub branch in `GITHUB_REPO`
-(`GITHUB_BRANCH`, default `main`, under `campaigns/{slug}/`). The landing page uses
-that file's public raw URL, for example
-`https://raw.githubusercontent.com/{owner}/{repo}/main/campaigns/{slug}/desktop-ab12cd34.png`.
-The repository has to be public so the CMS preview can load the image.
-
-## Tests
+Requer Node 20+ e Yarn 1.
 
 ```bash
-cd backend && npm run typecheck && npm test
-cd admin-ui && npx tsc --noEmit && npx vitest run
+yarn setup       # instala node/, react/ e as ferramentas da raiz
+yarn test        # 24 testes, sem banco externo
+yarn typecheck   # Node, React (TypeScript 5.5 e o 3.9 do builder) e testes
 ```
 
-## Data
+## Colocar no ar
 
-Conversations, uploaded attachments and generated banners are stored as files in
-`backend/data/` (`DATA_DIR`). Delete the folder to reset the history.
+### 1. Levar o banco para o portal
+
+No `customer-portal-demoindsupply`:
+
+1. Copiar `db/migrations/005_sku_mapping_admin.sql` para `db/migrations/` e `db/writer-token.ts` para `db/`.
+2. Em `package.json`, adicionar o script:
+   ```json
+   "db:writer-token": "node --env-file-if-exists=.env.local --import tsx db/writer-token.ts"
+   ```
+3. Em `tests/sku-mapping-schema.test.ts`, incluir `"005_sku_mapping_admin.sql"` na lista de migrações esperadas.
+4. Em `.env.example`, documentar `# SKU_MAPPING_WRITER_JWT=` ao lado do `SKU_MAPPING_READER_JWT`.
+5. Rodar:
+   ```bash
+   npm run db:migrate
+   npm run db:writer-token   # grava SKU_MAPPING_WRITER_JWT no .env.local e testa na Data API
+   ```
+
+O `db:writer-token` usa o mesmo `SUPABASE_LEGACY_JWT_SECRET` do `db:reader-token`. Com `SUPABASE_PUBLISHABLE_KEY` definido, ele confirma que o token executa as funções e não lê a tabela. Para invalidar todos os tokens de escrita: `revoke sku_mapping_writer from authenticator;`.
+
+### 2. Link num workspace de desenvolvimento
+
+```bash
+vtex login demoindsupply
+vtex use dev
+vtex link
+```
+
+Abrir `https://dev--demoindsupply.myvtex.com/admin/sku-mapping`.
+
+### 3. Configurações do app
+
+Em **Apps → SKU Mapping → Configurações** (no workspace em uso):
+
+| Campo | Valor |
+| --- | --- |
+| Supabase URL | `https://vxmotxxwjhxdjnleqidr.supabase.co` |
+| Supabase publishable key | Project Settings → API Keys → Publishable key |
+| Writer token | O `SKU_MAPPING_WRITER_JWT` gerado no passo 1 |
+
+Passe o token só por canal seguro, nunca em chat ou no repositório.
+
+### 4. Produção
+
+```bash
+vtex publish
+vtex use producao --production
+vtex install demoindsupply.sku-mapping@0.x
+vtex workspace promote
+```
+
+Preencha as configurações também no workspace de produção.
+
+## Conferir no primeiro teste
+
+- **Id da organização:** o plano assume que o id do CL corporativo é o `customerId` que o portal grava. Confirmar com uma organização que já tenha vínculos importados pelo portal: o total na tela tem que bater.
+- **Resposta do VTEX ID:** o Node exige `authStatus=Success`, `audience=admin` e `account=demoindsupply` em `/api/vtexid/credential/validate`. Se a tela disser que a sessão não foi confirmada com um usuário logado, o log do app mostra o motivo.
+- **Componentes da tela:** `Select` (com busca), `Dropzone`, `Progress`, `InputSearch` e `EmptyState` do `vtex.styleguide` só vão ser confirmados no link.
+- **Navegação:** trocar de organização usa `navigate` do `vtex.render-runtime` com a rota `admin.app.sku-mapping.organization`. Confirmar que a URL do Admin muda para `/admin/sku-mapping/<customerId>`.
+- **Trava compartilhada:** uma importação aberta por um comprador no portal bloqueia o Admin daquela organização até terminar, ou por no máximo 15 minutos.

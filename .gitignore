@@ -1,14 +1,10 @@
 node_modules/
-.pnpm-store/
-.next/
-out/
-build/
-coverage/
+node/dist/
 .DS_Store
-*.pem
+*.orig
+yarn-error.log
+npm-debug.log
 
-# Secrets and local data
+# Secrets
 .env
 .env.*
-!.env.example
-backend/data/

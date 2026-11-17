@@ -1,0 +1,5 @@
+mutation StartSkuMappingImport($organizationId: ID!, $fileName: String!) {
+  startSkuMappingImport(organizationId: $organizationId, fileName: $fileName) {
+    importId
+  }
+}
